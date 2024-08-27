@@ -1,0 +1,53 @@
+# 数据库部分的文档
+
+## sqlite3
+
+### Connection
+
+被称作「连接」，由 `sqlite3.connect(dbfilepath, ...)` 函数返回，是 `sqlite3` 操作数据库的前提。相当于 `requests` 中的 `Session` 对象，表示一次和数据库的会话。支持通过 `with` 进行自动上下文管理。
+
+文件路径除了填本地文件路径外，也可以填 `":memory:"` 来打开一个仅存在于内存中的 sqlite 数据库。
+
+连接不一定线程安全的，需要根据 `sqlite3.threadsafety` 的值确定[^1]。所以一般会为每个读写操作都临时创建一个连接。
+
+[^1]: https://docs.python.org/zh-cn/3.12/library/sqlite3.html#sqlite3.threadsafety
+
+### Cursor
+
+被称作「游标」，由 `Connection.cursor()` 方法返回，是 `sqlite3` 操作数据库的核心接口。
+
+得到游标之后就可以对数据库做操作了。
+
+以下是部分方法：[^2]
+
+[^2]: https://docs.python.org/zh-cn/3.12/library/sqlite3.html#sqlite3.Cursor
+
+#### execute(sql, parameters=())
+
+执行*一条* SQL 语句，同时提供数据绑定方法以防止注入。不过如果要编写的部分不是用户能接触到的，用字符串格式化或拼接也没问题。
+
+> 要执行多条，使用 `executemany(...)`
+
+提供的数据绑定方法与字符串格式化的形式很像，在 SQL 语句中使用占位符，`parameters` 中的对应参数会被自动绑定到对应位置。可以使用问号占位和命名占位两种风格，分别类似于格式化字符串中的位置格式化和关键字格式化。
+
+##### 问号占位
+
+在语句中使用 `?` 占位
+
+此时 `parameters` 必须是一个长度与占位符的数量相匹配的 `Sequence`
+
+##### 命名占位
+
+在语句中使用 `:key` 占位
+
+此时 `parameters` 必须是 `dict`（或其子类）的实例，它必须包含与所有命名参数相对应的键（额外的将被忽略）
+
+> sqlite3 防止 SQL 注入的方法不是简单的转义。它会先对语句进行预编译，再将提供的参数绑定到语句中。此时提供的参数仅会被视为纯粹的值，不可能与语句混淆。
+
+#### fetchall()
+
+在执行了一个查询语句之后，可使用 `fetchall()` 方法获得所有的查询结果。
+
+> 也可使用 `fetchone()` `fetchmany()` 获得一个、多个查询结果。
+
+也可以遍历游标对象作为替代。
