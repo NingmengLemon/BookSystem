@@ -1,6 +1,6 @@
 import sqlite3
 import json
-from typing import TypedDict, TypeAlias, Union, List, Dict, Unpack, Any
+from typing import TypedDict, TypeAlias, Union, List, Dict, Unpack, Any, Type, Mapping
 
 from rwlock import ReadWriteLock
 
@@ -36,6 +36,32 @@ class QueriedBookInfo(_RequiredBookInfo, total=True):
     id: int
 
 
+class PartialQueriedBookInfo(QueriedBookInfo, total=False):
+    pass
+
+
+_TYPE_TO_SQLITE_TYPE_MAP = {
+    str: "TEXT",
+    int: "INTEGER",
+    float: "REAL",
+    None: "NULL",
+    type(None): "NULL",
+    _JSONType: "TEXT",
+}
+
+
+def type_to_sqlitetype(t: Type) -> str | None:
+    return _TYPE_TO_SQLITE_TYPE_MAP.get(t)
+
+
+def verify_keys(d: Mapping, dt: Type[Mapping], fullmatch=False):
+    anno = getattr(dt, "__annotations__", {})
+    if fullmatch:
+        assert set(d.keys()) == set(anno.keys()), "keys not equal"
+    for k in d.keys():
+        assert k in anno, f"unexpected key: {k}"
+
+
 class BookDB:
     """
     图书数据库对象
@@ -55,17 +81,17 @@ class BookDB:
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS books (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    title TEXT NOT NULL,
-                    isbn TEXT NOT NULL,
-                    author TEXT NOT NULL,
-                    publisher TEXT NOT NULL,
-                    desc TEXT NOT NULL,
-                    cover TEXT NOT NULL,
-                    price REAL NOT NULL,
-                    extra TEXT NOT NULL
+                    {},
+                    id INTEGER PRIMARY KEY AUTOINCREMENT
                 )
-                """
+                """.format(
+                    ", ".join(
+                        [
+                            f"{k} {type_to_sqlitetype(v)} NOT NULL"
+                            for k, v in _RequiredBookInfo.__annotations__.items()
+                        ]
+                    )
+                )
             )
 
     def add(self, book: BookInfo):
@@ -73,19 +99,16 @@ class BookDB:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO books (title, isbn, author, publisher, desc, cover, price, extra)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    book["title"],
-                    book["isbn"],
-                    book["author"],
-                    book["publisher"],
-                    book["desc"],
-                    book["cover"],
-                    book["price"],
-                    json.dumps(book["extra"]),
+                INSERT INTO books ({})
+                VALUES ({})
+                """.format(
+                    ", ".join(_RequiredBookInfo.__annotations__.keys()),
+                    ", ".join(["?"] * len(_RequiredBookInfo.__annotations__)),
                 ),
+                [
+                    (json.dumps(book[k]) if v == _JSONType else book[k])  # type: ignore[literal-required]
+                    for k, v in _RequiredBookInfo.__annotations__.items()
+                ],
             )
 
     def delete(self, book_id: int):
@@ -94,26 +117,31 @@ class BookDB:
             cursor.execute("DELETE FROM books WHERE id = ?", (book_id,))
 
     def modify(self, book_id: int, **info: Unpack[PartialBookInfo]):
+        if not info:
+            return
+        verify_keys(info, PartialBookInfo, fullmatch=False)
         update_query = "UPDATE books SET "
         update_values = []
         for key, value in info.items():
             update_query += f"{key} = ?, "
-            update_values.append(value)
+            update_values.append(
+                (
+                    json.dumps(value)
+                    if PartialBookInfo.__annotations__[key] == _JSONType
+                    else value
+                )
+            )
         update_query = update_query.rstrip(", ") + " WHERE id = ?"
         update_values.append(book_id)
         with self._lock.write_lock(), self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(update_query, tuple(update_values))
 
-    def search(
-        self, book_id: int | None = None, **info: Unpack[PartialBookInfo]
-    ) -> List[QueriedBookInfo]:
+    def search(self, **info: Unpack[PartialQueriedBookInfo]) -> List[QueriedBookInfo]:
+        verify_keys(info, PartialQueriedBookInfo, fullmatch=False)
         query = "SELECT * FROM books"
         params: List[Any] = []
-        if book_id is not None:
-            query += " WHERE id = ?"
-            params.append(book_id)
-        elif info:
+        if info:
             query += " WHERE "
             conditions = []
             for key, value in info.items():
@@ -126,16 +154,15 @@ class BookDB:
             rows = cursor.fetchall()
         books = []
         for row in rows:
-            book = QueriedBookInfo(
-                id=row[0],
-                title=row[1],
-                isbn=row[2],
-                author=row[3],
-                publisher=row[4],
-                desc=row[5],
-                cover=row[6],
-                price=row[7],
-                extra=json.loads(row[8]),
+            book = QueriedBookInfo(  # type: ignore[misc]
+                {
+                    k: (
+                        json.loads(row[i])
+                        if QueriedBookInfo.__annotations__[k] == _JSONType
+                        else row[i]
+                    )
+                    for i, k in enumerate(QueriedBookInfo.__annotations__.keys())
+                }
             )
             books.append(book)
         return books
@@ -144,3 +171,7 @@ class BookDB:
         with self._lock.write_lock(), self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("VACUUM")
+
+
+if __name__ == "__main__":
+    db = BookDB("./books.db")
