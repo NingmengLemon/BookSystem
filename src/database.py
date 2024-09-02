@@ -5,8 +5,8 @@ from typing import TypedDict, TypeAlias, Union, List, Dict, Unpack, Any
 from rwlock import ReadWriteLock
 
 
-JsonType: TypeAlias = Union[
-    str, int, float, bool, None, Dict[str, "JsonType"], List["JsonType"]
+_JSONType: TypeAlias = Union[
+    str, int, float, bool, None, Dict[str, "_JSONType"], List["_JSONType"]
 ]
 
 
@@ -22,7 +22,7 @@ class _RequiredBookInfo(TypedDict):
     desc: str
     cover: str
     price: float
-    extra: JsonType
+    extra: _JSONType
 
 
 BookInfo: TypeAlias = _RequiredBookInfo
@@ -65,7 +65,7 @@ class BookDB:
                     price REAL NOT NULL,
                     extra TEXT NOT NULL
                 )
-            """
+                """
             )
 
     def add(self, book: BookInfo):
@@ -75,7 +75,7 @@ class BookDB:
                 """
                 INSERT INTO books (title, isbn, author, publisher, desc, cover, price, extra)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+                """,
                 (
                     book["title"],
                     book["isbn"],
@@ -87,65 +87,60 @@ class BookDB:
                     json.dumps(book["extra"]),
                 ),
             )
-            conn.commit()
 
     def delete(self, book_id: int):
         with self._lock.write_lock(), self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM books WHERE id = ?", (book_id,))
-            conn.commit()
 
     def modify(self, book_id: int, **info: Unpack[PartialBookInfo]):
+        update_query = "UPDATE books SET "
+        update_values = []
+        for key, value in info.items():
+            update_query += f"{key} = ?, "
+            update_values.append(value)
+        update_query = update_query.rstrip(", ") + " WHERE id = ?"
+        update_values.append(book_id)
         with self._lock.write_lock(), self._get_connection() as conn:
             cursor = conn.cursor()
-            update_query = "UPDATE books SET "
-            update_values = []
-            for key, value in info.items():
-                update_query += f"{key} = ?, "
-                update_values.append(value)
-            update_query = update_query.rstrip(", ")
-            update_query += " WHERE id = ?"
-            update_values.append(book_id)
             cursor.execute(update_query, tuple(update_values))
-            conn.commit()
 
     def search(
         self, book_id: int | None = None, **info: Unpack[PartialBookInfo]
     ) -> List[QueriedBookInfo]:
+        query = "SELECT * FROM books"
+        params: List[Any] = []
+        if book_id is not None:
+            query += " WHERE id = ?"
+            params.append(book_id)
+        elif info:
+            query += " WHERE "
+            conditions = []
+            for key, value in info.items():
+                conditions.append(f"{key} = ?")
+                params.append(value)
+            query += " AND ".join(conditions)
         with self._lock.read_lock(), self._get_connection() as conn:
             cursor = conn.cursor()
-            query = "SELECT * FROM books"
-            params: List[Any] = []
-            if book_id is not None:
-                query += " WHERE id = ?"
-                params.append(book_id)
-            elif info:
-                query += " WHERE "
-                conditions = []
-                for key, value in info.items():
-                    conditions.append(f"{key} = ?")
-                    params.append(value)
-                query += " AND ".join(conditions)
             cursor.execute(query, tuple(params))
             rows = cursor.fetchall()
-            books = []
-            for row in rows:
-                book = QueriedBookInfo(
-                    id=row[0],
-                    title=row[1],
-                    isbn=row[2],
-                    author=row[3],
-                    publisher=row[4],
-                    desc=row[5],
-                    cover=row[6],
-                    price=row[7],
-                    extra=json.loads(row[8]),
-                )
-                books.append(book)
-            return books
+        books = []
+        for row in rows:
+            book = QueriedBookInfo(
+                id=row[0],
+                title=row[1],
+                isbn=row[2],
+                author=row[3],
+                publisher=row[4],
+                desc=row[5],
+                cover=row[6],
+                price=row[7],
+                extra=json.loads(row[8]),
+            )
+            books.append(book)
+        return books
 
     def vacuum(self):
         with self._lock.write_lock(), self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("VACUUM")
-            conn.commit()

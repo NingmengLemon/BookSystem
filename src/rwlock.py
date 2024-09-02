@@ -1,4 +1,5 @@
 import threading
+from typing import Literal
 
 
 class ReadWriteLock:
@@ -30,6 +31,11 @@ class ReadWriteLock:
         with self._lock:
             self._writer = False
             self._read_ready.notify_all()
+
+    def get_lock(self, rw: Literal["read", "write"]):
+        if rw == "read":
+            return self.read_lock()
+        return self.write_lock()
 
     def read_lock(self):
         return _ReadLock(self)
