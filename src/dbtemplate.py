@@ -114,12 +114,14 @@ class _DataBase:
                 )
             )
 
-    def add(self, item: dict[str, Any]):
+    def add(self, item: dict[str, Any]) -> int | None:
         """增加条目
 
         :param item: 要增加的条目，键必须与定义完全相同（不计顺序）
         :type item: dict[str, Any]
-        """
+        :return: 新增的条目在数据库中的id
+        :rtype: int | None
+        """           
         self._validate_keys(item, self._datadef, fullmatch=True)
         with self._lock.write_lock(), self._get_connection() as conn:
             cursor = conn.cursor()
@@ -134,6 +136,7 @@ class _DataBase:
                 ),
                 [item[k] for k in self._datadef.keys()],
             )
+            return cursor.lastrowid
 
     def delete(self, item_id: int):
         """删除条目
