@@ -1,33 +1,7 @@
 import sqlite3
-import json
-from typing import (
-    TypeAlias,
-    Union,
-    List,
-    Dict,
-    Any,
-    Type,
-    Mapping,
-)
+from typing import TypeAlias, List, Any, Type, Mapping
 
 from rwlock import ReadWriteLock
-
-
-JSONType: TypeAlias = Union[
-    str, int, float, bool, None, Dict[str, "JSONType"], List["JSONType"]
-]
-
-
-BOOKDB_CONTENT_DEF = {
-    "title": str,
-    "isbn": str,  # ISBN 13
-    "author": str,
-    "publisher": str,
-    "desc": str,
-    "cover": str,
-    "price": float,
-    "extra": JSONType,
-}
 
 _TYPE_TO_SQLITE_TYPE_MAP = {
     str: "TEXT",
@@ -35,7 +9,7 @@ _TYPE_TO_SQLITE_TYPE_MAP = {
     float: "REAL",
     None: "NULL",
     type(None): "NULL",
-    JSONType: "TEXT",
+    bytes: "BLOB",
 }
 
 
@@ -158,10 +132,7 @@ class _DataBase:
                     ", ".join(self._datadef.keys()),
                     ", ".join(["?"] * len(self._datadef)),
                 ),
-                [
-                    (json.dumps(item[k]) if v == JSONType else item[k])
-                    for k, v in self._datadef.items()
-                ],
+                [item[k] for k in self._datadef.keys()],
             )
 
     def delete(self, item_id: int):
@@ -187,9 +158,7 @@ class _DataBase:
         update_values = []
         for key, value in info.items():
             update_query += f"{key} = ?, "
-            update_values.append(
-                (json.dumps(value) if self._datadef[key] == JSONType else value)
-            )
+            update_values.append(value)
         update_query = update_query.rstrip(", ") + " WHERE id = ?"
         update_values.append(item_id)
         with self._lock.write_lock(), self._get_connection() as conn:
@@ -218,14 +187,7 @@ class _DataBase:
             rows = cursor.fetchall()
         books = []
         for row in rows:
-            book = {
-                k: (
-                    json.loads(row[i])
-                    if self._datadef_with_id[k] == JSONType
-                    else row[i]
-                )
-                for i, k in enumerate(self._datadef_with_id.keys())
-            }
+            book = {k: row[i] for i, k in enumerate(self._datadef_with_id.keys())}
             books.append(book)
         return books
 
@@ -235,8 +197,16 @@ class _DataBase:
             cursor.execute("VACUUM")
 
 
-BookDB = dbcls_factory(BOOKDB_CONTENT_DEF, "BookDB", "books")
-
-
 if __name__ == "__main__":
+    BOOKDB_CONTENT_DEF = {
+        "title": str,
+        "isbn": str,  # ISBN 13
+        "author": str,
+        "publisher": str,
+        "desc": str,
+        "cover": str,
+        "price": float,
+        "extra": str,
+    }
+    BookDB = dbcls_factory(BOOKDB_CONTENT_DEF, "BookDB", "books")
     db = BookDB("./books.db")
