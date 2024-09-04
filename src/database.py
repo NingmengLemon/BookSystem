@@ -54,18 +54,21 @@ def verify_keys(d: Mapping, dt: DBContentDef, fullmatch=False):
         assert k in anno, f"unexpected key: {k}"
 
 
-def dbcls_factory(datadef: DBContentDef, name: str = "NewDB"):
+def dbcls_factory(datadef: DBContentDef, cls_name: str, table_name: str):
     def init(self, dbpath: str):
-        _DataBase.__init__(self, dbpath, datadef)
+        _DataBase.__init__(self, dbpath, datadef, table_name)
 
-    return type(name, (_DataBase,), {"__init__": init})
+    return type(cls_name, (_DataBase,), {"__init__": init})
 
 
 class _DataBase:
-    def __init__(self, dbpath: str, datadef: DBContentDef) -> None:
+    def __init__(
+        self, dbpath: str, datadef: DBContentDef, tablename: str = "database"
+    ) -> None:
         self._datadef = dict(datadef)
         self._datadef_with_id = dict(datadef)
         self._datadef_with_id["id"] = int
+        self._table_name = tablename
 
         self._dbpath = dbpath
         self._lock = ReadWriteLock()
@@ -79,17 +82,18 @@ class _DataBase:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                CREATE TABLE IF NOT EXISTS books (
+                CREATE TABLE IF NOT EXISTS {} (
                     {},
                     id INTEGER PRIMARY KEY AUTOINCREMENT
                 )
                 """.format(
+                    self._table_name,
                     ", ".join(
                         [
                             f"{k} {type_to_sqlitetype(v)} NOT NULL"
                             for k, v in self._datadef.items()
                         ]
-                    )
+                    ),
                 )
             )
 
@@ -99,9 +103,10 @@ class _DataBase:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO books ({})
+                INSERT INTO {} ({})
                 VALUES ({})
                 """.format(
+                    self._table_name,
                     ", ".join(self._datadef.keys()),
                     ", ".join(["?"] * len(self._datadef)),
                 ),
@@ -114,13 +119,13 @@ class _DataBase:
     def delete(self, item_id: int):
         with self._lock.write_lock(), self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM books WHERE id = ?", (item_id,))
+            cursor.execute(f"DELETE FROM {self._table_name} WHERE id = ?", (item_id,))
 
     def modify(self, item_id: int, **info):
         if not info:
             return
         verify_keys(info, self._datadef, fullmatch=False)
-        update_query = "UPDATE books SET "
+        update_query = f"UPDATE {self._table_name} SET "
         update_values = []
         for key, value in info.items():
             update_query += f"{key} = ?, "
@@ -135,7 +140,7 @@ class _DataBase:
 
     def search(self, **info) -> List[dict]:
         verify_keys(info, self._datadef_with_id, fullmatch=False)
-        query = "SELECT * FROM books"
+        query = f"SELECT * FROM {self._table_name}"
         params: List[Any] = []
         if info:
             query += " WHERE "
@@ -167,7 +172,7 @@ class _DataBase:
             cursor.execute("VACUUM")
 
 
-BookDB = dbcls_factory(BOOKDB_CONTENT_DEF, "BookDB")
+BookDB = dbcls_factory(BOOKDB_CONTENT_DEF, "BookDB", "books")
 
 
 if __name__ == "__main__":
