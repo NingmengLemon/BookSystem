@@ -121,7 +121,7 @@ class _DataBase:
         :type item: dict[str, Any]
         :return: 新增的条目在数据库中的id
         :rtype: int | None
-        """           
+        """
         self.validate_keys(item, self._datadef, fullmatch=True)
         with self._lock.write_lock(), self._get_connection() as conn:
             cursor = conn.cursor()
@@ -168,7 +168,7 @@ class _DataBase:
             cursor = conn.cursor()
             cursor.execute(update_query, tuple(update_values))
 
-    def search(self, **info) -> List[dict]:
+    def search(self, fuzzy_match=False, **info) -> List[dict]:
         """查找条目
 
         :return: 找到的条目们
@@ -181,8 +181,12 @@ class _DataBase:
             query += " WHERE "
             conditions = []
             for key, value in info.items():
-                conditions.append(f"{key} = ?")
-                params.append(value)
+                if fuzzy_match and isinstance(self._datadef_with_id.get(key), str):
+                    conditions.append(f"{key} LIKE ?")
+                    params.append(f"%{value}%")
+                else:
+                    conditions.append(f"{key} = ?")
+                    params.append(value)
             query += " AND ".join(conditions)
         with self._lock.read_lock(), self._get_connection() as conn:
             cursor = conn.cursor()
