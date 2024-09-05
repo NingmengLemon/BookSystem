@@ -22,8 +22,7 @@ class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
 
 
 if __name__ == "__main__":
-    port = find_free_port(8080)
-    server_address = ("", port)
+    server_address = ("", find_free_port(8080))
     httpd = ThreadingSimpleServer(server_address, server.ReqHandler)
 
     print(f"Server running on port {server_address[1]}...")
