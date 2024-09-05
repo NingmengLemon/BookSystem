@@ -1,5 +1,7 @@
 import sqlite3
-from typing import TypeAlias, List, Any, Type, Mapping
+from typing import TypeAlias, List, Any, Type
+from collections.abc import Mapping, Iterable
+from dataclasses import dataclass
 
 from rwlock import ReadWriteLock
 
@@ -7,9 +9,8 @@ _TYPE_TO_SQLITE_TYPE_MAP = {
     str: "TEXT",
     int: "INTEGER",
     float: "REAL",
-    None: "NULL",
-    type(None): "NULL",
     bytes: "BLOB",
+    None: "NULL",
 }
 
 
@@ -24,14 +25,52 @@ def type_to_sqlitetype(t: Type) -> str | None:
     return _TYPE_TO_SQLITE_TYPE_MAP.get(t)
 
 
-DBContentDef: TypeAlias = Mapping[str, Any]
+_DataTypeDef: TypeAlias = dict[str, Type]
 
 
-def dbcls_factory(datadef: DBContentDef, cls_name: str, table_name: str | None = None):
+@dataclass
+class _RowDef:
+    name: str
+    type: Type
+    unique: bool = False
+    nullable: bool = False
+
+    @property
+    def as_dict(self) -> _DataTypeDef:
+        return {self.name: self.type}
+
+
+class TableDef(list[_RowDef]):
+    def __init__(self, cdef: Mapping[str, Type] | Iterable[_RowDef]):
+        if isinstance(cdef, Mapping):
+            for n, t in cdef.items():
+                if n.lower() == "id":
+                    raise NameError("name `id` is reserved for inner use")
+                self.append(_RowDef(name=n, type=t))
+        elif isinstance(cdef, Iterable):
+            for rd in cdef:
+                if isinstance(rd, _RowDef):
+                    self.append(rd)
+                else:
+                    raise ValueError(f"expect RowDef, got {type(rd)}")
+
+    @property
+    def as_dict(self) -> _DataTypeDef:
+        result: _DataTypeDef = {}
+        for r in self:
+            result.update(r.as_dict)
+        return result
+
+
+def dbcls_factory(
+    tabledef: TableDef | _DataTypeDef | Iterable[_RowDef],
+    cls_name: str,
+    table_name: str | None = None,
+):
     """从 `datadef` 动态生成一个继承自 `_DataBase` 的数据库类定义
 
-    :param datadef: 数据库类定义中的表字段定义
-    :type datadef: DBContentDef
+    :param table: 数据库类定义中的表字段定义
+    :type tabledef: TableDef
     :param cls_name: 类定义的名称
     :type cls_name: str
     :param table_name: 表的名称，省略时取 `cls_name` 的值
@@ -41,9 +80,11 @@ def dbcls_factory(datadef: DBContentDef, cls_name: str, table_name: str | None =
     """
     if table_name is None:
         table_name = cls_name
+    if not isinstance(tabledef, TableDef):
+        tabledef = TableDef(tabledef)
 
     def init(self, dbpath: str):
-        _DataBase.__init__(self, dbpath, datadef, table_name)
+        _DataBase.__init__(self, dbpath, tabledef, table_name)
 
     return type(cls_name, (_DataBase,), {"__init__": init})
 
@@ -54,10 +95,11 @@ class KeysValidationFailure(Exception):
 
 class _DataBase:
     def __init__(
-        self, dbpath: str, datadef: DBContentDef, tablename: str = "database"
+        self, dbpath: str, tabledef: TableDef, tablename: str = "database"
     ) -> None:
-        self._datadef = dict(datadef)
-        self._datadef_with_id = dict(datadef)
+        self._tabledef = tabledef
+        self._datadef = tabledef.as_dict
+        self._datadef_with_id = dict(self._datadef)
         self._datadef_with_id["id"] = int
         self._table_name = tablename
 
@@ -66,18 +108,23 @@ class _DataBase:
         self._create_table()
 
     @staticmethod
-    def validate_keys(d: Mapping, dt: DBContentDef, fullmatch=False):
+    def validate_keys(
+        d: Mapping[str, Any], dt: TableDef | Mapping[str, Any], fullmatch=False
+    ):
         """以 `dt` 为标准验证 `d` 中的键
 
         :param d: 被验证的映射
         :type d: Mapping
-        :param dt: 作为标准的映射
+        :param dt: 作为标准的表定义
         :type dt: DBContentDef
         :param fullmatch: 是否必须全部匹配, defaults to False
         :type fullmatch: bool, optional
         :raises KeysValidationFailure:
         """
-        dt_keys = set(dt.keys())
+        if isinstance(dt, TableDef):
+            dt_keys = {d_.name for d_ in dt}
+        else:
+            dt_keys = set(dt.keys())
         d_keys = set(d.keys())
 
         if fullmatch:
@@ -107,8 +154,12 @@ class _DataBase:
                     self._table_name,
                     ", ".join(
                         [
-                            f"{k} {type_to_sqlitetype(v)} NOT NULL"
-                            for k, v in self._datadef.items()
+                            (
+                                f"{rd.name} {type_to_sqlitetype(rd.type)}"
+                                + (" UNIQUE" if rd.unique else "")
+                                + ("" if rd.nullable else " NOT NULL")
+                            )
+                            for rd in self._tabledef
                         ]
                     ),
                 )
@@ -181,7 +232,7 @@ class _DataBase:
             query += " WHERE "
             conditions = []
             for key, value in info.items():
-                if fuzzy_match and isinstance(self._datadef_with_id.get(key), str):
+                if fuzzy_match and self._datadef_with_id.get(key) == str:
                     conditions.append(f"{key} LIKE ?")
                     params.append(f"%{value}%")
                 else:
