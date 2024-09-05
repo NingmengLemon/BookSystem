@@ -66,7 +66,7 @@ class _DataBase:
         self._create_table()
 
     @staticmethod
-    def _validate_keys(d: Mapping, dt: DBContentDef, fullmatch=False):
+    def validate_keys(d: Mapping, dt: DBContentDef, fullmatch=False):
         """以 `dt` 为标准验证 `d` 中的键
 
         :param d: 被验证的映射
@@ -122,7 +122,7 @@ class _DataBase:
         :return: 新增的条目在数据库中的id
         :rtype: int | None
         """           
-        self._validate_keys(item, self._datadef, fullmatch=True)
+        self.validate_keys(item, self._datadef, fullmatch=True)
         with self._lock.write_lock(), self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -156,7 +156,7 @@ class _DataBase:
         """
         if not info:
             return
-        self._validate_keys(info, self._datadef, fullmatch=False)
+        self.validate_keys(info, self._datadef, fullmatch=False)
         update_query = f"UPDATE {self._table_name} SET "
         update_values = []
         for key, value in info.items():
@@ -174,7 +174,7 @@ class _DataBase:
         :return: 找到的条目们
         :rtype: List[dict]
         """
-        self._validate_keys(info, self._datadef_with_id, fullmatch=False)
+        self.validate_keys(info, self._datadef_with_id, fullmatch=False)
         query = f"SELECT * FROM {self._table_name}"
         params: List[Any] = []
         if info:
