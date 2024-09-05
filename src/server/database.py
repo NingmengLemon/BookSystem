@@ -1,4 +1,4 @@
-from dbtemplate import dbcls_factory, KeysValidationFailure
+from dbtemplate import dbcls_factory, KeysValidationFailure  # pylint: disable=W0611
 
 BOOKDB_CONTENT_DEF = {
     "title": str,

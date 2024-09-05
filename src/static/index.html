@@ -8,9 +8,63 @@
 
 <body>
     <h1>书籍管理系统喵</h1>
+    <button id="addButton">添加条目</button>
+    <!-- 弹窗模态 -->
+    <div id="addModal"
+        style="display:none; position: fixed; top: 20%; left: 30%; width: 40%; padding: 20px; border: 1px solid black; background-color: white;">
+        <h2>添加新条目</h2>
+        <label for="title">标题:</label><br>
+        <input type="text" id="title"><br><br>
+
+        <label for="isbn">ISBN:</label><br>
+        <input type="text" id="isbn"><br><br>
+
+        <label for="author">作者:</label><br>
+        <input type="text" id="author"><br><br>
+
+        <label for="publisher">出版社:</label><br>
+        <input type="text" id="publisher"><br><br>
+
+        <label for="desc">描述:</label><br>
+        <textarea id="desc" rows="4" cols="50"></textarea><br><br>
+
+        <label for="cover">封面URL:</label><br>
+        <input type="text" id="cover"><br><br>
+
+        <label for="price">价格:</label><br>
+        <input type="number" step="0.01" id="price"><br><br>
+
+        <label for="extra">额外信息:</label><br>
+        <textarea id="extra" rows="4" cols="50"></textarea><br><br>
+
+        <button id="confirmAddButton">确认</button>
+        <button id="cancelAddButton">取消</button>
+    </div>
+    <br /><br />
+
+    <input id="queryInput" />
     <button id="queryButton">查询</button>
+    <details>
+        <summary>更多查询选项</summary>
+        <input type="radio" id="qTypeChoice1" name="qTypeChoice" value="title" checked />
+        <label for="qTypeChoice1">标题</label>
+        <input type="radio" id="qTypeChoice2" name="qTypeChoice" value="isbn" />
+        <label for="qTypeChoice2">ISBN</label>
+        <input type="radio" id="qTypeChoice3" name="qTypeChoice" value="author" />
+        <label for="qTypeChoice3">作者</label>
+        <input type="radio" id="qTypeChoice4" name="qTypeChoice" value="publisher" />
+        <label for="qTypeChoice4">出版社</label>
+        <input type="radio" id="qTypeChoice5" name="qTypeChoice" value="desc" />
+        <label for="qTypeChoice5">描述</label>
+        <input type="radio" id="qTypeChoice6" name="qTypeChoice" value="price" />
+        <label for="qTypeChoice6">价格</label>
+        <input type="radio" id="qTypeChoice7" name="qTypeChoice" value="extra" />
+        <label for="qTypeChoice7">额外信息</label>
+
+
+    </details>
     <br><br>
-    <table id="itemsTable">
+    <table id="itemsTable" border="1">
         <thead>
             <tr>
                 <th>ID</th>
@@ -30,124 +84,7 @@
         </tbody>
     </table>
 
-    <script>
-        document.getElementById('queryButton').addEventListener('click', fetchItems);
-
-        function fetchItems() {
-            fetch('/search') // 替换为实际的查询API URL
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('网络响应不是OK');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    populateTable(data);
-                })
-                .catch(error => {
-                    alert('获取数据失败: ' + error.message);
-                });
-        }
-
-        function populateTable(items) {
-            const tbody = document.getElementById('itemsTable').getElementsByTagName('tbody')[0];
-            tbody.innerHTML = ''; // 清空现有内容
-
-            items.forEach(item => {
-                const row = tbody.insertRow();
-
-                // 插入各个单元格
-                row.insertCell().innerText = item.id;
-                row.insertCell().innerText = item.title;
-                row.insertCell().innerText = item.isbn;
-                row.insertCell().innerText = item.author;
-                row.insertCell().innerText = item.publisher;
-                row.insertCell().innerText = item.desc;
-
-                // 封面显示为图片
-                const coverCell = row.insertCell();
-                // const img = document.createElement('img');
-                // img.src = item.cover;
-                // img.alt = '封面';
-                // img.width = 50; // 调整图片大小
-                // coverCell.appendChild(img);
-
-                row.insertCell().innerText = item.price.toFixed(2);
-                row.insertCell().innerText = item.extra;
-
-                // 操作按钮
-                // const actionCell = row.insertCell();
-
-                // // 修改按钮
-                // const modifyButton = document.createElement('button');
-                // modifyButton.innerText = '修改';
-                // modifyButton.addEventListener('click', () => modifyItem(item));
-                // actionCell.appendChild(modifyButton);
-                // // 删除按钮
-                // const deleteButton = document.createElement('button');
-                // deleteButton.innerText = '删除';
-                // deleteButton.style.marginLeft = '10px';
-                // deleteButton.addEventListener('click', () => deleteItem(item.id));
-                // actionCell.appendChild(deleteButton);
-            });
-        }
-
-        // function deleteItem(id) {
-        //     if (!confirm('确定要删除这个条目吗？')) {
-        //         return;
-        //     }
-        //     fetch(`YOUR_DELETE_API_URL/${{id}}`, { // 替换为实际的删除API URL
-        //         method: 'DELETE'
-        //     })
-        //     .then(response => {
-        //         if (!response.ok) {
-        //             throw new Error('删除失败');
-        //         }
-        //         alert('删除成功');
-        //         fetchItems(); // 刷新列表
-        //     })
-        //     .catch(error => {
-        //         alert('删除失败: ' + error.message);
-        //     });
-        // }
-
-        // function modifyItem(item) {
-        //     // 简单的修改提示，可以根据需要扩展为表单
-        //     const newTitle = prompt('修改标题:', item.title);
-        //     if (newTitle === null) return; // 用户取消
-
-        //     const newAuthor = prompt('修改作者:', item.author);
-        //     if (newAuthor === null) return;
-
-        //     // 构建更新的数据对象
-        //     const updatedItem = {
-        //         ...item,
-        //         title: newTitle,
-        //         author: newAuthor
-        //     };
-
-        //     fetch(`YOUR_UPDATE_API_URL/${{item.id}}`, { // 替换为实际的更新API URL
-        //         method: 'PUT', // 或 'PATCH'，取决于API设计
-        //         headers: {
-        //             'Content-Type': 'application/json'
-        //         },
-        //         body: JSON.stringify(updatedItem)
-        //     })
-        //     .then(response => {
-        //         if (!response.ok) {
-        //             throw new Error('更新失败');
-        //         }
-        //         alert('更新成功');
-        //         fetchItems(); // 刷新列表
-        //     })
-        //     .catch(error => {
-        //         alert('更新失败: ' + error.message);
-        //     });
-        // }
-
-        // 可选：自动加载数据
-        window.onload = fetchItems;
-    </script>
+    <script src="/static/script.js"></script>
 </body>
 
 </html>

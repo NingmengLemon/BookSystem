@@ -56,24 +56,36 @@ class ReqHandler(SimpleHTTPRequestHandler):
         if db.database is None:
             self.send_error(500, "Database Not Initialized")
             return
-        
-        
+
         parsed_url = parse.urlparse(self.path)
         path = parsed_url.path
         query_params = parse.parse_qs(parsed_url.query)
         if self.path == "/":
             self.serve_html("static/index.html")
+        elif self.path.startswith("/static/"):
+            self.serve_static_file(self.path)
         elif path == "/search":
             self.search_api(query_params)
         else:
             self.send_error(404, "File Not Found")
             
+    def serve_static_file(self, file_path):
+        if os.path.exists(file_path[1:]):
+            content_type = self.guess_type(file_path)
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.end_headers()
+            with open(file_path[1:], 'rb') as file:
+                self.wfile.write(file.read())
+        else:
+            self.send_error(404, "File Not Found")
+
     def serve_html(self, file_path):
         if os.path.exists(file_path):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            with open(file_path, 'rb') as file:
+            with open(file_path, "rb") as file:
                 self.wfile.write(file.read())
         else:
             self.send_error(404, "File Not Found")
@@ -83,9 +95,9 @@ class ReqHandler(SimpleHTTPRequestHandler):
             self.send_error(500, "Database Not Initialized")
             return
         if self.path == "/delete":
-            self.delete_api()
+            self.delete_api()  # pylint: disable=E1120
         elif self.path == "/add":
-            self.add_api()
+            self.add_api()  # pylint: disable=E1120
         else:
             self.send_error(404, "File Not Found")
 
@@ -93,7 +105,7 @@ class ReqHandler(SimpleHTTPRequestHandler):
         params = {k: v(q[k][0]) for k, v in db.BOOKDB_CONTENT_DEF.items() if k in q}
         if "id" in q:
             params["id"] = int(q["id"][0])
-        result = db.database.search(**params)
+        result = db.database.search(fuzzy_match=True, **params)
         self.send_response(200)
         self.send_header("Content-type", "application/json; charset=utf-8")
         self.end_headers()
