@@ -26,7 +26,7 @@ def i_am_post_api(func):
 
 @functools.singledispatch
 def parse_delete_api_params(params: Any):
-    return []
+    return params
 
 
 @parse_delete_api_params.register
@@ -68,14 +68,14 @@ class ReqHandler(SimpleHTTPRequestHandler):
             self.search_api(query_params)
         else:
             self.send_error(404, "File Not Found")
-            
+
     def serve_static_file(self, file_path):
         if os.path.exists(file_path[1:]):
             content_type = self.guess_type(file_path)
             self.send_response(200)
             self.send_header("Content-Type", content_type)
             self.end_headers()
-            with open(file_path[1:], 'rb') as file:
+            with open(file_path[1:], "rb") as file:
                 self.wfile.write(file.read())
         else:
             self.send_error(404, "File Not Found")
@@ -98,6 +98,8 @@ class ReqHandler(SimpleHTTPRequestHandler):
             self.delete_api()  # pylint: disable=E1120
         elif self.path == "/add":
             self.add_api()  # pylint: disable=E1120
+        elif self.path == "/modify":
+            self.modify_api()  # pylint: disable=E1120
         else:
             self.send_error(404, "File Not Found")
 
@@ -150,7 +152,7 @@ class ReqHandler(SimpleHTTPRequestHandler):
                 db.database.delete(i)
             except sqlite3.Error as e:
                 logging.error("Database Error: %s", e)
-                raise
+                # raise
             else:
                 succ.append(i)
         self.send_response(200)
@@ -159,5 +161,27 @@ class ReqHandler(SimpleHTTPRequestHandler):
         self.wfile.write(json.dumps({"ids": succ}, ensure_ascii=False).encode("utf-8"))
 
     @i_am_post_api
-    def modify_api(self, params):
-        pass
+    def modify_api(self, params: Any):
+        if isinstance(params, dict):
+            params = [params]
+        if not isinstance(params, list):
+            self.send_error(400, "Wrong Request Params")
+            return
+        succ = []
+        for item in params:
+            if not isinstance(item, dict):
+                continue
+            if "id" not in item:
+                continue
+            id_ = item.pop("id")
+            p = {k: v for k, v in item.items() if k in db.BOOKDB_CONTENT_DEF}
+            try:
+                db.database.modify(item_id=id_, **p)
+            except sqlite3.Error as e:
+                logging.error("Database Error: %s", e)
+            else:
+                succ.append(id_)
+        self.send_response(200)
+        self.send_header("Content-type", "application/json; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(json.dumps({"ids": succ}, ensure_ascii=False).encode("utf-8"))
