@@ -2,9 +2,9 @@ from http.server import HTTPServer
 from socketserver import ThreadingMixIn
 import socket
 
-import stdlib_server
+import server
 
-stdlib_server.init()
+server.init()
 
 
 def find_free_port(starting_port):
@@ -23,7 +23,7 @@ class ThreadingSimpleServer(ThreadingMixIn, HTTPServer):
 
 if __name__ == "__main__":
     server_address = ("", find_free_port(8080))
-    httpd = ThreadingSimpleServer(server_address, stdlib_server.ReqHandler)
+    httpd = ThreadingSimpleServer(server_address, server.ReqHandler)
 
     print(f"Server running on port {server_address[1]}...")
     httpd.serve_forever()
