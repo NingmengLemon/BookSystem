@@ -2,10 +2,23 @@ document.getElementById('queryButton').addEventListener('click', searchItems);
 
 document.getElementById('addButton').addEventListener('click', function () {
     document.getElementById('addModal').style.display = 'block';
+    document.getElementById('confirmAddButton').addEventListener('click', addItems);
+    document.getElementById('modalTitle').textContent = "添加新条目";
+    document.getElementById('title').value = "";
+    document.getElementById('isbn').value = "";
+    document.getElementById('author').value = "";
+    document.getElementById('publisher').value = "";
+    document.getElementById('desc').value = "";
+    document.getElementById('cover').value = "";
+    document.getElementById('price').value = "";
+    document.getElementById('extra').value = "";
 });
 
 document.getElementById('cancelAddButton').addEventListener('click', function () {
     document.getElementById('addModal').style.display = 'none';
+    document.getElementById('confirmAddButton').removeEventListener('click', addItems);
+    const confirmAddButton = document.getElementById('confirmAddButton');
+    confirmAddButton.replaceWith(confirmAddButton.cloneNode(true));
 });
 
 function searchItems() {
@@ -59,18 +72,68 @@ function populateTable(items) {
         // 操作按钮
         const actionCell = row.insertCell();
 
-        // // 修改按钮
-        // const modifyButton = document.createElement('button');
-        // modifyButton.innerText = '修改';
-        // modifyButton.addEventListener('click', () => modifyItem(item));
-        // actionCell.appendChild(modifyButton);
+        // 修改按钮
+        const modifyButton = document.createElement('button');
+        modifyButton.innerText = '修改';
+        modifyButton.addEventListener('click', () => {
+            document.getElementById('addModal').style.display = 'block';
+            document.getElementById('modalTitle').textContent = "修改条目";
+            function tmpModifyItem() {
+                modifyItem(item.id);
+                document.getElementById('confirmAddButton').removeEventListener('click', tmpModifyItem);
+                document.getElementById('addModal').style.display = 'none';
+            };
+            document.getElementById('confirmAddButton').addEventListener('click', tmpModifyItem);
+            function cancelModifyItem() {
+                document.getElementById('confirmAddButton').removeEventListener('click', cancelModifyItem);
+                document.getElementById('confirmAddButton').removeEventListener('click', tmpModifyItem);
+            }
+            document.getElementById('confirmAddButton').addEventListener('click', cancelModifyItem);
+            document.getElementById('title').value = item.title;
+            document.getElementById('isbn').value = item.isbn;
+            document.getElementById('author').value = item.author;
+            document.getElementById('publisher').value = item.publisher;
+            document.getElementById('desc').value = item.desc;
+            document.getElementById('cover').value = item.cover;
+            document.getElementById('price').value = item.price;
+            document.getElementById('extra').value = item.extra;
+        });
+        actionCell.appendChild(modifyButton);
+        actionCell.appendChild(document.createElement('br'));
         // 删除按钮
         const deleteButton = document.createElement('button');
         deleteButton.innerText = '删除';
-        deleteButton.style.marginLeft = '10px';
         deleteButton.addEventListener('click', () => deleteItem(item.id));
         actionCell.appendChild(deleteButton);
     });
+}
+
+function modifyItem(id) {
+    const newEntry = {
+        id: id,
+        title: document.getElementById('title').value,
+        isbn: document.getElementById('isbn').value,
+        author: document.getElementById('author').value,
+        publisher: document.getElementById('publisher').value,
+        desc: document.getElementById('desc').value,
+        cover: document.getElementById('cover').value,
+        price: parseFloat(document.getElementById('price').value),
+        extra: document.getElementById('extra').value
+    };
+    fetch("/modify", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newEntry),
+    }).then((response) => response.json())
+        .then((data) => {
+            console.log("Success:", data);
+            searchItems();
+        })
+        .catch((error) => {
+            console.error("Error:", error);
+        });
 }
 
 function deleteItem(id) {
@@ -94,7 +157,7 @@ function deleteItem(id) {
         });
 }
 
-document.getElementById('confirmAddButton').addEventListener('click', function () {
+function addItems() {
     const newEntry = {
         title: document.getElementById('title').value,
         isbn: document.getElementById('isbn').value,
@@ -115,7 +178,7 @@ document.getElementById('confirmAddButton').addEventListener('click', function (
     })
         .then(response => {
             if (response.ok) {
-                alert('条目已成功添加');
+                // alert('条目已成功添加');
                 document.getElementById('addModal').style.display = 'none'; // 关闭弹窗
                 searchItems()
             } else {
@@ -125,7 +188,7 @@ document.getElementById('confirmAddButton').addEventListener('click', function (
         .catch(error => {
             console.error('添加条目时出错:', error);
         });
-});
+}
 
 // 自动加载数据
 window.onload = searchItems;
