@@ -1,0 +1,28 @@
+.main_panel {
+    width: 320px;
+    height: 240px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-color: #66ccff;
+    border-width: 2px;
+}
+
+.centered {
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+}
+
+.left_align {
+    margin-left: 0px;
+    text-align: left;
+}
+
+.nine {
+    color: #01bcf3;
+}
