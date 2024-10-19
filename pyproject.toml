@@ -2,16 +2,23 @@
 name = "BookSystem"
 version = "0.1.0"
 description = "Default template for PDM package"
-authors = [
-    {name = "NingmengLemon", email = "guanchenxiang@outlook.com"},
-]
+authors = [{ name = "NingmengLemon", email = "guanchenxiang@outlook.com" }]
 dependencies = [
     "fastapi[all]>=0.115.2",
+    "sqlmodel>=0.0.22",
+    "passlib[argon2]>=1.7.4",
 ]
 requires-python = "==3.12.*"
 readme = "README.md"
-license = {text = "MIT"}
+license = { text = "MIT" }
 
 
 [tool.pdm]
 distribution = false
+
+[tool.pdm.dev-dependencies]
+dev = ["ipykernel>=6.29.5"]
+
+[tool.pdm.scripts]
+dev = { cmd = ["fastapi", "dev"] }
+launch = { cmd = ["fastapi", "run"] }
