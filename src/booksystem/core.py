@@ -1,3 +1,4 @@
+import logging
 import time
 from typing import Annotated
 from contextlib import asynccontextmanager
@@ -6,6 +7,7 @@ import uuid
 from fastapi import FastAPI, HTTPException, Depends, Cookie, Query, Body, Response
 from sqlmodel import col, create_engine, SQLModel, Session, select
 from passlib.hash import argon2
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from .models import User, Book, LoginSession
 from .models import (
@@ -17,7 +19,10 @@ from .models import (
     BookModifyPayload,
 )
 
+LOGIN_SESSION_EXPIRES = 60 * 60 * 24
+
 app = FastAPI()
+logger = logging.getLogger(__name__)
 
 db_filename = "booksys.db"
 db_url = f"sqlite:///{db_filename}"
@@ -40,11 +45,26 @@ def get_dbsession():
 DbSessDep = Annotated[Session, Depends(get_dbsession)]
 
 
+def clear_expired_session():
+    with Session(db_engine) as dbsession:
+        sesss = dbsession.exec(
+            select(LoginSession).where(LoginSession.expire_at <= time.time())
+        ).all()
+        if sesss:
+            for s in sesss:
+                dbsession.delete(s)
+            dbsession.commit()
+            logger.info("cleared %d expired sessions", len(sesss))
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     create_db_and_tables()
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(clear_expired_session, "interval", minutes=LOGIN_SESSION_EXPIRES)
+    scheduler.start()
     yield
-    # 好 好神秘（）
+    scheduler.shutdown()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -90,7 +110,7 @@ async def login(payload: LoginPayload, dbsession: DbSessDep, response: Response)
         select(User).where(User.username == payload.username)
     ).one_or_none():
         if argon2.verify(payload.password, user.password):
-            expires = time.time() + (60 * 60 * 24)
+            expires = time.time() + LOGIN_SESSION_EXPIRES
             login_session = LoginSession(user_id=user.id, expire_at=expires)
             dbsession.add(login_session)
             dbsession.commit()
@@ -139,8 +159,8 @@ async def query_book(
     dbsession: DbSessDep,
     login_session: LoginSessDep,
     payload: BookQueryPayload = Body(None),
-    page_size: int = Query(20),
-    offset: int = Query(0),
+    page_size: int = Query(20, ge=1),
+    offset: int = Query(0, ge=0),
 ):
     if not payload:
         payload = BookQueryPayload()
@@ -179,7 +199,7 @@ async def modify_book(
     dbsession.add(book)
     dbsession.commit()
     dbsession.refresh(book)
-    return book.id
+    return {"book_id": book.id}
 
 
 @app.post("/api/book/delete")

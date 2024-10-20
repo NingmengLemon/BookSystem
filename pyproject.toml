@@ -7,6 +7,7 @@ dependencies = [
     "fastapi[all]>=0.115.2",
     "sqlmodel>=0.0.22",
     "passlib[argon2]>=1.7.4",
+    "APScheduler>=3.10.4",
 ]
 requires-python = "==3.12.*"
 readme = "README.md"
