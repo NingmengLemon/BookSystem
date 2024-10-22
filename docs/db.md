@@ -7,15 +7,15 @@
 数据库操作的基本流程大概是：
 
 连接到数据库 `conn = sqlite3.connect("example.db")`
--> 
+->
 创建游标 `cur = conn.cursor()`
--> 
+->
 执行语句 `cur.execute(...)`
--> 
+->
 获取结果/提交事务 `result = cur.fetchall()` / `conn.commit()`
--> 
+->
 关闭游标 `cur.close()`
--> 
+->
 关闭连接 `conn.close()`
 
 将上述过程封装成类或许更方便操作。
@@ -28,7 +28,7 @@
 
 连接不一定线程安全的，需要根据 `sqlite3.threadsafety` 的值确定（经测试一般为`3`，表示线程安全）[^1]。不过除此之外从性能角度考量，一般也会为每个线程都临时创建一个连接，操作完成后关闭。
 
-[^1]: https://docs.python.org/zh-cn/3.12/library/sqlite3.html#sqlite3.threadsafety
+[^1]: <https://docs.python.org/zh-cn/3.12/library/sqlite3.html#sqlite3.threadsafety>
 
 如果对数据库有修改，默认需要手动调用 `commit()` 方法来提交。如果使用 `with` 自动管理上下文，块结束时也会自动提交。
 
@@ -40,7 +40,7 @@
 
 以下是部分方法：[^2]
 
-[^2]: https://docs.python.org/zh-cn/3.12/library/sqlite3.html#sqlite3.Cursor
+[^2]: <https://docs.python.org/zh-cn/3.12/library/sqlite3.html#sqlite3.Cursor>
 
 #### execute(sql, parameters=())
 
